@@ -1,0 +1,13 @@
+streamlit
+pandas
+numpy
+warnings
+subprocess
+plotly
+scipy
+sklearn
+pymysql
+sqlalchemy
+urllib.pars
+requests
+copy
