@@ -220,6 +220,10 @@ def style_dataframe(value_df, percent_df):
 st.title('Title')
 main_tab, tab_1, tab_2 = st.tabs(['Cover','Chart','Analysis'])
 
+<<<<<<< HEAD
+=======
+@st.cache_resource
+>>>>>>> 9ead3bafd16a1e24965b9e3cd4e5a61349c82121
 with main_tab: #Cover table page
     st.markdown("<h1 style='font-size: 20px;'>본드스왑 스프레드</h1>", unsafe_allow_html=True)
     for i, tenor in enumerate(['3m', '6m', '12m']):
@@ -236,7 +240,15 @@ with main_tab: #Cover table page
             st.write(style_dataframe(last_val[tenor][1][0], last_val[tenor][1][1]))
         with col4:
             st.write(highlight_top_bottom(last_val[tenor][1][1]))
+<<<<<<< HEAD
 
+
+# ## Chart
+=======
+>>>>>>> 9ead3bafd16a1e24965b9e3cd4e5a61349c82121
+
+
+# ## Chart
 def macd(data:pd.DataFrame, short_window, long_window, signal_window, tot_window):
     value = data.columns[0]
     
