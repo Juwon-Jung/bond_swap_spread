@@ -220,9 +220,29 @@ def style_dataframe(value_df, percent_df):
 st.title('Title')
 main_tab, tab_1, tab_2 = st.tabs(['Cover','Chart','Analysis'])
 
+with main_tab: #Cover table page
+    st.markdown("<h1 style='font-size: 20px;'>본드스왑 스프레드</h1>", unsafe_allow_html=True)
+    for i, tenor in enumerate(['3m', '6m', '12m']):
+        col1, col2 = st.columns(2)
+        with col1:
+            st.write(style_dataframe(last_val[tenor][0][0], last_val[tenor][0][1]))
+        with col2:
+            st.write(highlight_top_bottom(last_val[tenor][0][1]))
+            
+    st.markdown("<h3 style='font-size: 20px;'>본드스왑 롤</h3>", unsafe_allow_html=True)       
+    for i, tenor in enumerate(['3m', '6m', '12m']):
+        col3, col4 = st.columns(2)
+        with col3:
+            st.write(style_dataframe(last_val[tenor][1][0], last_val[tenor][1][1]))
+        with col4:
+            st.write(highlight_top_bottom(last_val[tenor][1][1]))
+
+
+# ## Chart
 
 def macd(data:pd.DataFrame, short_window, long_window, signal_window, tot_window):
     value = data.columns[0]
+    
     data=data.sort_index(ascending=True)
     data['Date'] = data.index
     
@@ -236,6 +256,9 @@ def macd(data:pd.DataFrame, short_window, long_window, signal_window, tot_window
     data['Cross_Up'] = ((data['Crossover'] < 0) & (data['Crossover'].shift(1) >= 0))
     data['Cross_Down'] = ((data['Crossover'] > 0) & (data['Crossover'].shift(1) <= 0))
 
+    cross_up = data[data['Cross_Up']]
+    cross_down = data[data['Cross_Down']]
+    
     # 시계열 데이터 플롯
     fig1 = go.Figure()
     
@@ -246,37 +269,26 @@ def macd(data:pd.DataFrame, short_window, long_window, signal_window, tot_window
         line=dict(color="grey")
     ))
     
-    # Cross_Up 빨간 화살표
-    for idx, row in data.loc[data["Cross_Up"]].iterrows():
-        fig1.add_annotation(
-            x=row["Date"],
-            y=row[value],  # y좌표에 value 컬럼 사용
-            ax=0,
-            ay=5,  # 위쪽으로 화살표
-            xanchor="center",
-            yanchor="bottom",
-            text="",  # 텍스트 제거
-            showarrow=True,
-            arrowhead=1,
-            arrowsize=2,
-            arrowcolor="red"
-        )
+    # 화살표를 표시할 데이터 준비
+    arrow_up = go.Scatter(
+        x=cross_up.index,
+        y=cross_up[value],  # 위쪽으로 화살표 표시 (y값을 조정)
+        mode='markers+text',
+        marker=dict(symbol='arrow-bar-up', color='red', size=7),
+        name='Cross_Up'
+    )
     
-    # Cross_Down 파란 화살표
-    for idx, row in data.loc[data["Cross_Down"]].iterrows():
-        fig1.add_annotation(
-            x=row["Date"],
-            y=row[value],  # y좌표에 value 컬럼 사용
-            ax=0,
-            ay=-5,  # 아래쪽으로 화살표
-            xanchor="center",
-            yanchor="top",
-            text="",  # 텍스트 제거
-            showarrow=True,
-            arrowhead=1,
-            arrowsize=2,
-            arrowcolor="blue"
-        )
+    arrow_down = go.Scatter(
+        x=cross_down.index,
+        y=cross_down[value],  # 아래쪽으로 화살표 표시 (y값을 조정)
+        mode='markers+text',
+        marker=dict(symbol='arrow-bar-down', color='blue', size=7),
+        name='Cross_Down'
+    )
+
+    fig1.add_trace(arrow_up)
+    fig1.add_trace(arrow_down)
+
     
     fig1.update_layout(
         title="Value & Cross Points",
@@ -313,31 +325,9 @@ def macd(data:pd.DataFrame, short_window, long_window, signal_window, tot_window
     return fig1, fig2
 
 
-with main_tab: #Cover table page
-    st.markdown("<h1 style='font-size: 20px;'>본드스왑 스프레드</h1>", unsafe_allow_html=True)
-    for i, tenor in enumerate(['3m', '6m', '12m']):
-        col1, col2 = st.columns(2)
-        with col1:
-            st.write(style_dataframe(last_val[tenor][0][0], last_val[tenor][0][1]))
-        with col2:
-            st.write(highlight_top_bottom(last_val[tenor][0][1]))
-            
-    st.markdown("<h3 style='font-size: 20px;'>본드스왑 롤</h3>", unsafe_allow_html=True)       
-    for i, tenor in enumerate(['3m', '6m', '12m']):
-        col3, col4 = st.columns(2)
-        with col3:
-            st.write(style_dataframe(last_val[tenor][1][0], last_val[tenor][1][1]))
-        with col4:
-            st.write(highlight_top_bottom(last_val[tenor][1][1]))
-
-
-# ## Chart
-
 def fig_update(fig, data, n_days):
     fig.update_layout(
-        xaxis=dict(
-            range=[data.index[-2007+n_days], data.index[0]]  # x축 범위를 최신 n일로 설정
-        ), showlegend=True
+        xaxis=dict(range=[data.index[-2007+n_days], data.index[0]]),
     )
 
 
@@ -360,9 +350,14 @@ def macd_st_plot(num):
     for tenor in selected_tenor:
         if column in data[(tenor,selected_direction)].columns:
             data = pd.DataFrame(data[(tenor,selected_direction)][column])
-            fig1, fig2 = macd(data, 3, 10, 3, tenor_dict[tenor]+1)
+            fig1, fig2 = macd(data, 12, 29, 9, tenor_dict[tenor]+1)
             fig_update(fig1, data, n_days)
-            fig_update(fig2, data, n_days)     
+            fig_update(fig2, data, n_days)
+
+            min = data[:n_days].min().min()
+            max = data[:n_days].max().max()
+            
+            fig1.update_layout(yaxis=dict(range=[min-abs(min*0.1),max+abs(max*0.1)]))
             
             st.plotly_chart(fig1, key=f"fig1_{tenor}_{selected_direction}_{i}_{num}")
             st.plotly_chart(fig2, key=f"fig2_{tenor}_{selected_direction}_{i}_{num}")
@@ -440,7 +435,7 @@ def box_plot_st(num):
     else:
         data = raw_roll
     range = range_dict[selected_tenor]
-    raw_df = data[raw_data_dict[selected_column]].iloc[0:range, :]
+    raw_df = data[selected_column].iloc[0:range, :]
     fig = box_plot_update(raw_df)
     st.plotly_chart(fig, key=f"plot_{num}_box")
 
