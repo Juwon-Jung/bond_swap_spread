@@ -51,85 +51,87 @@ def db_connect():
     return engine
 
 
+# +
+engine = db_connect()
+sheet_dict = {'국고' : '시가평가 4사평균 국고채권', 
+              '통안' : '시가평가 4사평균 통안증권', 
+              '특은' : '시가평가 4사평균 금융채 산금채 AAA',
+              '공사' : '시가평가 4사평균 특수채 공사채 AAA', 
+              '시은' : '시가평가 4사평균 금융채 은행채 AAA', 
+              '카드' : '시가평가 4사평균 금융채 카드채 AA+',
+              '캐피탈' : '시가평가 4사평균 기타금융채AA-'}
+
+date_dict = {'3m' : 60,
+        '6m' : 120,
+        '12m' : 252}
+
+def read_from_sql(name: str, ascending: bool = True):
+    # 기본 SELECT 쿼리 생성
+    query = f'SELECT * FROM `{name}`'
+    order_by = None
+
+    # order_by가 지정되면 ORDER BY 구문 추가
+    if order_by:
+        order_direction = 'ASC' if ascending else 'DESC'
+        query += f' ORDER BY `{order_by}` {order_direction}'
+    
+    # SQL 쿼리 실행 및 결과 반환
+    read_data = pd.read_sql(query, con=engine)
+    read_data = read_data.set_index("index")
+    return read_data
+
 @st.cache_data
-def pre_loading():
-    engine = db_connect()
-    
-    sheet_dict = {'국고' : '시가평가 4사평균 국고채권', 
-                  '통안' : '시가평가 4사평균 통안증권', 
-                  '특은' : '시가평가 4사평균 금융채 산금채 AAA',
-                  '공사' : '시가평가 4사평균 특수채 공사채 AAA', 
-                  '시은' : '시가평가 4사평균 금융채 은행채 AAA', 
-                  '카드' : '시가평가 4사평균 금융채 카드채 AA+',
-                  '캐피탈' : '시가평가 4사평균 기타금융채AA-'}
-    
-    date_dict = {'3m' : 60,
-                '6m' : 120,
-                '12m' : 252}
-    
-    def read_from_sql(name: str, ascending: bool = True):
-        # 기본 SELECT 쿼리 생성
-        query = f'SELECT * FROM `{name}`'
-        order_by = None
-    
-        # order_by가 지정되면 ORDER BY 구문 추가
-        if order_by:
-            order_direction = 'ASC' if ascending else 'DESC'
-            query += f' ORDER BY `{order_by}` {order_direction}'
-        
-        # SQL 쿼리 실행 및 결과 반환
-        read_data = pd.read_sql(query, con=engine)
-        read_data = read_data.set_index("index")
-        return read_data
-        
-    def find_last_val(data_dict):
+def find_last_val(data_dict):
+    df = pd.DataFrame()
+    for sheet in sheet_dict.keys():
+        df[sheet] = data_dict[sheet].iloc[0,:]
+    return df.transpose()
+
+@st.cache_data
+def min_max_scaling(data_dict): # 백분위상 치치
+    tot_dict = {}
+    scaler = MinMaxScaler()
+    for key, n in date_dict.items():
         df = pd.DataFrame()
         for sheet in sheet_dict.keys():
-            df[sheet] = data_dict[sheet].iloc[0,:]
-        return df.transpose()
-    
-    def min_max_scaling(data_dict): # 백분위상 치치
-        tot_dict = {}
-        scaler = MinMaxScaler()
-        for key, n in date_dict.items():
-            df = pd.DataFrame()
-            for sheet in sheet_dict.keys():
-                data = data_dict[sheet]
-                sliced_data = data.iloc[:n, :]
-                scaled_data = scaler.fit_transform(sliced_data)
-                scaled_data_df = pd.DataFrame(scaled_data, columns = sliced_data.columns)
-                df[sheet] = scaled_data_df.iloc[0,:]
-            tot_dict[key] = df.round(2).transpose()
-        return tot_dict
-    
-    def find_high_low(df:pd.DataFrame):
-        df_unstacked = df.unstack()
-        top_5 = df_unstacked.nlargest(5)
-        bottom_5 = df_unstacked.nsmallest(5)
-        
-        # (index, column) 형태로 반환
-        top_5_results = [idx for idx, val in top_5.items()]
-        bottom_5_results = [idx for idx, val in bottom_5.items()]
-        
-        return top_5_results, bottom_5_results
-    
-    def high_low_data(df, dt, spread_dict, roll_dict):
-        top_dict = {}
-        bottom_dict = {}
-        top_5, bottom_5 = find_high_low(df)
-        if dt == "spread":
-            data = spread_dict
-        else:
-            data = roll_dict
-            
-        for top in top_5:
-            top_dict[f"{top[1]}{top[0]}"] = data[top[1]][top[0]]
-    
-        for bot in bottom_5:
-            bottom_dict[f"{bot[1]}{bot[0]}"] = data[bot[1]][bot[0]]
-    
-        return pd.DataFrame(top_dict), pd.DataFrame(bottom_dict)
+            data = data_dict[sheet]
+            sliced_data = data.iloc[:n, :]
+            scaled_data = scaler.fit_transform(sliced_data)
+            scaled_data_df = pd.DataFrame(scaled_data, columns = sliced_data.columns)
+            df[sheet] = scaled_data_df.iloc[0,:]
+        tot_dict[key] = df.round(2).transpose()
+    return tot_dict
 
+def find_high_low(df:pd.DataFrame):
+    df_unstacked = df.unstack()
+    top_5 = df_unstacked.nlargest(5)
+    bottom_5 = df_unstacked.nsmallest(5)
+    
+    # (index, column) 형태로 반환
+    top_5_results = [idx for idx, val in top_5.items()]
+    bottom_5_results = [idx for idx, val in bottom_5.items()]
+    
+    return top_5_results, bottom_5_results
+
+def high_low_data(df, dt, spread_dict, roll_dict):
+    top_dict = {}
+    bottom_dict = {}
+    top_5, bottom_5 = find_high_low(df)
+    if dt == "spread":
+        data = spread_dict
+    else:
+        data = roll_dict
+        
+    for top in top_5:
+        top_dict[f"{top[1]}{top[0]}"] = data[top[1]][top[0]]
+
+    for bot in bottom_5:
+        bottom_dict[f"{bot[1]}{bot[0]}"] = data[bot[1]][bot[0]]
+
+    return pd.DataFrame(top_dict), pd.DataFrame(bottom_dict)
+
+@st.cache_data
+def load_data_from_db():
     #DB에서 데이터 불러오기
     spread_dict = {}
     roll_dict = {}
@@ -137,41 +139,36 @@ def pre_loading():
     for sheet in sheet_dict.keys():
         spread_dict[sheet] = read_from_sql(f"{sheet} 스왑 스프레드")
         roll_dict[sheet] = read_from_sql(f"{sheet} 스왑 롤")
+    return spread_dict, roll_dict
 
-    last_val_spread_df = find_last_val(spread_dict)
-    last_val_roll_df = find_last_val(roll_dict)
-    spread_min_max_dict = min_max_scaling(spread_dict)
-    roll_min_max_dict = min_max_scaling(roll_dict)
+raw_spread, raw_roll = load_data_from_db()
 
-    #last_val -> 실질적인 Cover 전체 데이터! [range][실제/누적백분위][spread/roll] 형태
-    last_val = {}
-    for n_range in date_dict.keys():
-        spread_data = [last_val_spread_df, spread_min_max_dict[n_range]]
-        roll_data = [last_val_roll_df, roll_min_max_dict[n_range]]
-        last_val[n_range] = (spread_data, roll_data)
+last_val_spread_df = find_last_val(raw_spread)
+last_val_roll_df = find_last_val(raw_roll)
+spread_min_max_dict = min_max_scaling(raw_spread)
+roll_min_max_dict = min_max_scaling(raw_roll)
 
-    raw_spread = spread_dict
-    raw_roll = roll_dict
+#last_val -> 실질적인 Cover 전체 데이터! [range][실제/누적백분위][spread/roll] 형태
+last_val = {}
+for n_range in date_dict.keys():
+    spread_data = [last_val_spread_df, spread_min_max_dict[n_range]]
+    roll_data = [last_val_roll_df, roll_min_max_dict[n_range]]
+    last_val[n_range] = (spread_data, roll_data)
 
-    tot_data = {}
-    table_dict = {'spread':spread_min_max_dict, 'roll':roll_min_max_dict}
-    
-    for dt in ["spread", "roll"]:
-        dt_data = {}
-        for n_range in ["3m", "6m", "12m"]:
-            df = table_dict[dt][n_range]
-            top_5, bottom_5 = high_low_data(df, dt, spread_dict, roll_dict)
-            dt_data[(n_range, "Top")] = top_5
-            dt_data[(n_range, "Bottom")] = bottom_5
-        tot_data[dt] = dt_data
+tot_data = {}
+table_dict = {'spread':spread_min_max_dict, 'roll':roll_min_max_dict}
 
-    spread_cum_data = tot_data['spread']
-    roll_cum_data = tot_data['roll']
-        
-    return last_val, raw_spread, raw_roll, spread_cum_data, roll_cum_data
+for dt in ["spread", "roll"]:
+    dt_data = {}
+    for n_range in ["3m", "6m", "12m"]:
+        df = table_dict[dt][n_range]
+        top_5, bottom_5 = high_low_data(df, dt, raw_spread, raw_roll)
+        dt_data[(n_range, "Top")] = top_5
+        dt_data[(n_range, "Bottom")] = bottom_5
+    tot_data[dt] = dt_data
 
-
-last_val, raw_spread, raw_roll, spread_cum_data, roll_cum_data = pre_loading()
+spread_cum_data = tot_data['spread']
+roll_cum_data = tot_data['roll']
 
 
 # +
@@ -337,11 +334,10 @@ with main_tab: #Cover table page
 # ## Chart
 
 def fig_update(fig, data, n_days):
-    value = data.columns[0]
     fig.update_layout(
         xaxis=dict(
             range=[data.index[-2007+n_days], data.index[0]]  # x축 범위를 최신 n일로 설정
-        )
+        ), showlegend=True
     )
 
 
