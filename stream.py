@@ -220,7 +220,7 @@ def style_dataframe(value_df, percent_df):
 st.title('Title')
 main_tab, tab_1, tab_2 = st.tabs(['Cover','Chart','Analysis'])
 
-
+@st.cache_resource
 def macd(data:pd.DataFrame, short_window, long_window, signal_window, tot_window):
     value = data.columns[0]
     data=data.sort_index(ascending=True)
