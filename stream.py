@@ -218,7 +218,7 @@ def style_dataframe(value_df, percent_df):
 # ## Cover
 
 st.title('Title')
-main_tab, tab_1, tab_2 = st.tabs(['Cover','Chart','Analysis'])
+main_tab, tab_1, tab_2, tab_3 = st.tabs(['Cover','Chart','Analysis', 'BackTest'])
 
 with main_tab: #Cover table page
     st.markdown("<h1 style='font-size: 20px;'>본드스왑 스프레드</h1>", unsafe_allow_html=True)
@@ -516,3 +516,72 @@ with tab_2: # chart type 구분문 넣기
                 box_plot_st(i)
             if selected_type == 'Curve':
                 curve_st(i)
+
+# ## BackTest
+
+from MACD_Backtest import calculate_macd, calculate_percentile_rank, calculate_percentile_ranks, calculate_sigma, generate_macd_signals, get_top_bottom_percentile_stocks, build_and_manage_positions, calculate_cumulative_pnl 
+
+
+def macd_plot(data, short, long, signal, lookback_period):
+    macd, signal = calculate_macd(data, short, long, signal)
+    percentile = calculate_percentile_ranks(data, lookback_period)
+    sigma = calculate_sigma(data, lookback_period)
+    top_5, bottom_5 = get_top_bottom_percentile_stocks(percentile, top_n=5, bottom_n=5)
+    positions = build_and_manage_positions(top_5, bottom_5, data, macd, signal, percentile, sigma, 1)
+    positions = positions.dropna(how='all')
+    trade_hist_data = calculate_cumulative_pnl(positions, data)
+    if trade_hist_data.empty:
+        last_pnl_by_date = pd.DataFrame(columns = ['Cumulative PnL'])
+    else:
+        last_pnl_by_date = trade_hist_data.groupby('Exit Date')['Cumulative PnL'].last()
+    
+    # Plotly 그래프 생성
+    fig = go.Figure()
+
+    # Line chart 추가
+    fig.add_trace(go.Scatter(
+        x=last_pnl_by_date.index,  # Exit Date
+        y=last_pnl_by_date.values,  # 마지막 Cumulative PnL 값
+        mode='lines+markers',
+        name='Cumulative PnL',
+        line=dict(color='blue'),
+        marker=dict(size=4)
+    ))
+
+    # 레이아웃 설정
+    fig.update_layout(
+        title="Cumulative PnL Over Time",
+        xaxis_title="Exit Date",
+        yaxis_title="Cumulative PnL",
+        xaxis=dict(showgrid=True, tickangle=45),
+        yaxis=dict(showgrid=True),
+        template="plotly_white",
+        hovermode="x unified",
+        width=900,
+        height=500
+    )
+    st.plotly_chart(fig)
+    st.write(trade_hist_data)
+
+
+with tab_3:
+    chart_count = st.number_input('Enter the number of charts to display:', min_value=1, max_value=6, value=1, key = 'backtest')
+    table_columns = st.columns(chart_count)
+    for num in range(chart_count):
+        with table_columns[num]:
+            select_data = st.multiselect('Select Data:', options=['국고','통안','공사','특은','시은','카드','캐피탈'], key=f"comp_{num}_backtest")
+            select_short = st.number_input('Enter the short:', min_value=1, max_value=300, value=12, key = f'short_{num}_backtest')
+            select_long = st.number_input('Enter the long:', min_value=select_short, max_value=300, value=26, key = f'long_{num}_backtest')
+            select_signal = st.number_input('Enter the signal:', min_value=1, max_value=300, value=9, key = f'signal_{num}_backtest')
+            select_lookback_period = st.number_input('Enter the lookback period:', min_value=1, max_value=300, value=60, key = f'lb_{num}_backtest')
+    
+            tot_data = pd.DataFrame()
+            for key in select_data:
+                data=raw_spread[key]
+                for col in data.columns:
+                    tot_data[f'{key}{col}']=data[col]
+            tot_data = tot_data.sort_index(ascending=True)
+            
+            macd_plot(tot_data, select_short, select_long, select_signal, select_lookback_period)        
+
+
